@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>作业登记（手机版）</title>
+<style>
+  :root { --fg:#1f2328; --mut:#656d76; --line:#d0d7de; --bg:#fff;
+          --ok:#1a7f37; --warn:#9a6700; --pri:#0969da; --bad:#cf222e; --hl:#ddf4ff; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; padding:10px 10px 84px; color:var(--fg); background:#f6f8fa;
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:18px; margin:0 0 10px; }
+  .card { background:var(--bg); border:1px solid var(--line); border-radius:10px;
+          padding:12px; margin-bottom:10px; }
+  label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
+  input, select { width:100%; padding:10px; font-size:16px; border:1px solid var(--line);
+                  border-radius:8px; background:#fff; color:var(--fg); }
+  .btn { padding:10px 16px; font-size:15px; border:0; border-radius:8px;
+         background:var(--pri); color:#fff; font-family:inherit; }
+  .btn.ghost { background:#fff; color:var(--fg); border:1px solid var(--line); }
+  .btn.sm { padding:6px 10px; font-size:13px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .gridwrap { overflow:auto; max-height:calc(100vh - 260px); border:1px solid var(--line);
+              border-radius:10px; background:#fff; -webkit-overflow-scrolling:touch; }
+  table { border-collapse:separate; border-spacing:0; font-size:13px; }
+  th, td { padding:0; text-align:center; border-bottom:1px solid #eaeef2; }
+  thead th { position:sticky; top:0; z-index:3; background:#f6f8fa; font-weight:600;
+             color:var(--mut); height:34px; min-width:44px; }
+  thead th.qh { cursor:pointer; }
+  .name { position:sticky; left:0; z-index:2; background:#fff; text-align:left;
+          padding:6px 8px; min-width:96px; max-width:130px; white-space:nowrap;
+          overflow:hidden; text-overflow:ellipsis; border-right:1px solid var(--line); }
+  thead .name { z-index:4; background:#f6f8fa; }
+  tbody tr:nth-child(even) .name { background:#fbfcfd; }
+  tbody tr:nth-child(even) td { background:#fbfcfd; }
+  .cell { width:44px; height:40px; cursor:pointer; user-select:none; font-size:14px;
+          display:flex; align-items:center; justify-content:center; border-left:1px solid #f0f3f6; }
+  .cell.st-done { background:#dafbe1; color:var(--ok); font-weight:600; }
+  .cell.st-fix  { background:#fff8c5; color:var(--warn); font-weight:600; }
+  .cell:active { background:var(--hl); }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--mut); margin-top:8px; flex-wrap:wrap; }
+  .dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px;
+         vertical-align:-1px; border:1px solid var(--line); }
+  .dot.a { background:#dafbe1; border-color:var(--ok); }
+  .dot.b { background:#fff8c5; border-color:var(--warn); }
+  .dot.c { background:#fff; }
+
+  .bar { position:fixed; left:0; right:0; bottom:0; background:rgba(246,248,250,.96);
+         border-top:1px solid var(--line); padding:10px 12px; display:flex; gap:10px;
+         align-items:center; justify-content:space-between; }
+  .status { font-size:13px; color:var(--mut); }
+  .status.ok { color:var(--ok); } .status.err { color:var(--bad); }
+  .hidden { display:none !important; }
+  .banner { background:#fff8c5; border:1px solid var(--warn); color:#7d4e00;
+            border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; }
+  .gate { max-width:380px; margin:12vh auto; }
+  .hint { font-size:12px; color:var(--mut); margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="gate" class="gate card">
+    <h1 style="margin-bottom:6px">作业登记</h1>
+    <div class="hint" style="margin:0 0 10px">手机上登记学生作业完成情况</div>
+    <label>口令</label>
+    <input id="pass" type="password" placeholder="输入口令" autocomplete="off">
+    <button class="btn" id="go" style="margin-top:12px;width:100%">进入</button>
+    <div class="hint">只有你知道这个口令。手机浏览器可「添加到主屏幕」，下次直接打开。</div>
+    <div id="gateMsg" class="status err" style="margin-top:8px"></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <h1>作业登记</h1>
+
+    <div id="mockBar" class="banner hidden">
+      演示模式（没连数据库）：改动只存在这台设备的浏览器里。
+    </div>
+
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label>班级</label>
+          <select id="cls"></select>
+        </div>
+        <div>
+          <label>作业</label>
+          <select id="assignment"></select>
+        </div>
+      </div>
+      <div class="legend">
+        <span><span class="dot c"></span>未登记</span>
+        <span><span class="dot a"></span>完成</span>
+        <span><span class="dot b"></span>已改错</span>
+        <span>点格子切换状态 · 点列头整列设完成</span>
+      </div>
+    </div>
+
+    <div id="gridWrap" class="gridwrap hidden">
+      <table id="grid"></table>
+    </div>
+
+    <div class="bar">
+      <span id="status" class="status">未开始</span>
+      <button class="btn sm ghost" id="reload">重新载入</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===========================================================================
+// 配置（上线前改这三处）
+// ===========================================================================
+var SUPABASE_URL = "https://hibdtvpmzqkkapmbdyoo.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_OWq4zy0waIK1riL0j525Tw_F6n6Al4V";
+var ACCESS_CODE = "gls2026";
+
+var MOCK = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+var STATUSES = ["未登记", "完成", "已改错"];
+var MARK = { "未登记": "", "完成": "\u2713", "已改错": "\u6539" };
+
+var API = {
+  headers: function () {
+    return { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY,
+             "Content-Type": "application/json" };
+  },
+  listAssignments: function () {
+    if (MOCK) {
+      var raw = localStorage.getItem("hw_demo_assignments");
+      if (raw) return Promise.resolve(JSON.parse(raw));
+      var demo = [{ id: 1, title: "示例作业（2023海淀期中反馈卷）", class: "高三(3)班",
+                    numbers: ["1","2","3","4","5","6"],
+                    students: ["张三","李四","王五"] }];
+      localStorage.setItem("hw_demo_assignments", JSON.stringify(demo));
+      return Promise.resolve(demo);
+    }
+    return fetch(SUPABASE_URL + "/rest/v1/hw_assignments?select=id,title,class,numbers,students&open=eq.true&order=id.desc",
+                 { headers: this.headers() })
+      .then(function (r) {
+        if (!r.ok) throw new Error("读取作业失败 " + r.status);
+        return r.json();
+      });
+  },
+  listSubmissions: function (aid) {
+    if (MOCK) {
+      var raw = localStorage.getItem("hw_demo_subs_" + aid);
+      return Promise.resolve(raw ? JSON.parse(raw) : []);
+    }
+    return fetch(SUPABASE_URL + "/rest/v1/hw_submissions?assignment_id=eq." + aid + "&select=student,statuses",
+                 { headers: this.headers() })
+      .then(function (r) {
+        if (!r.ok) throw new Error("读取记录失败 " + r.status);
+        return r.json();
+      });
+  },
+  save: function (aid, cls, student, statuses) {
+    if (MOCK) {
+      var key = "hw_demo_subs_" + aid;
+      var all = JSON.parse(localStorage.getItem(key) || "[]");
+      var i = -1;
+      for (var k = 0; k < all.length; k++) if (all[k].student === student) { i = k; break; }
+      if (i >= 0) all[i].statuses = statuses;
+      else all.push({ student: student, statuses: statuses });
+      localStorage.setItem(key, JSON.stringify(all));
+      return Promise.resolve();
+    }
+    var h = this.headers();
+    h["Prefer"] = "resolution=merge-duplicates,return=minimal";
+    return fetch(SUPABASE_URL + "/rest/v1/hw_submissions?on_conflict=assignment_id,student", {
+      method: "POST", headers: h,
+      body: JSON.stringify([{ assignment_id: aid, class: cls, student: student,
+                              statuses: statuses, updated_at: new Date().toISOString() }])
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) {
+        throw new Error("保存失败 " + r.status + " " + t.slice(0, 80));
+      });
+    });
+  }
+};
+
+var all = [], cur = null, roster = [], answers = {};
+var timers = {};
+function $(id) { return document.getElementById(id); }
+
+function setStatus(t, kind) {
+  var s = $("status");
+  s.textContent = t;
+  s.className = "status " + (kind || "");
+}
+function cellClass(v) { return v === "完成" ? "st-done" : v === "已改错" ? "st-fix" : ""; }
+
+function renderSelectors() {
+  var clsSel = $("cls"), classes = [], i;
+  for (i = 0; i < all.length; i++) if (classes.indexOf(all[i].class) < 0) classes.push(all[i].class);
+  clsSel.innerHTML = "";
+  for (i = 0; i < classes.length; i++) {
+    var o = document.createElement("option");
+    o.value = classes[i]; o.textContent = classes[i]; clsSel.append(o);
+  }
+  fillAssignments();
+}
+
+function fillAssignments() {
+  var cls = $("cls").value, sel = $("assignment"), i;
+  sel.innerHTML = "";
+  for (i = 0; i < all.length; i++) {
+    var a = all[i];
+    if (a.class !== cls) continue;
+    var o = document.createElement("option");
+    o.value = String(a.id);
+    o.textContent = a.title + "（" + (a.numbers || []).length + " 题，" + (a.students || []).length + " 人）";
+    sel.append(o);
+  }
+  loadCurrent();
+}
+
+function renderGrid() {
+  var nums = cur.numbers || [], t = $("grid"), i, j;
+  t.innerHTML = "";
+
+  var thead = document.createElement("thead");
+  var htr = document.createElement("tr");
+  var thName = document.createElement("th");
+  thName.className = "name"; thName.textContent = "姓名";
+  htr.append(thName);
+  for (i = 0; i < nums.length; i++) {
+    (function (n) {
+      var th = document.createElement("th");
+      th.className = "qh"; th.textContent = n;
+      th.title = "点一下把第 " + n + " 题全部设为完成";
+      th.onclick = function () {
+        for (var s = 0; s < roster.length; s++) {
+          answers[roster[s]] = answers[roster[s]] || {};
+          answers[roster[s]][n] = "完成";
+        }
+        renderBody(); saveAll();
+      };
+      htr.append(th);
+    })(nums[i]);
+  }
+  thead.append(htr); t.append(thead);
+
+  var tb = document.createElement("tbody");
+  for (i = 0; i < roster.length; i++) {
+    var stu = roster[i], tr = document.createElement("tr");
+    var td0 = document.createElement("td");
+    td0.className = "name"; td0.textContent = stu; td0.title = stu;
+    tr.append(td0);
+    for (j = 0; j < nums.length; j++) {
+      var n = nums[j], td = document.createElement("td");
+      var v = (answers[stu] && answers[stu][n]) || "未登记";
+      var d = document.createElement("div");
+      d.className = "cell " + cellClass(v);
+      d.textContent = MARK[v] || "";
+      d.dataset.stu = stu; d.dataset.q = n;
+      td.append(d); tr.append(td);
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+  $("gridWrap").classList.remove("hidden");
+  updateSummary();
+}
+
+function renderBody() {
+  var cells = document.querySelectorAll(".cell");
+  for (var i = 0; i < cells.length; i++) {
+    var d = cells[i];
+    var v = (answers[d.dataset.stu] && answers[d.dataset.stu][d.dataset.q]) || "未登记";
+    d.className = "cell " + cellClass(v);
+    d.textContent = MARK[v] || "";
+  }
+  updateSummary();
+}
+
+function updateSummary() {
+  var nums = (cur && cur.numbers) || [], done = 0, i, j;
+  for (i = 0; i < roster.length; i++) {
+    for (j = 0; j < nums.length; j++) {
+      if (((answers[roster[i]] || {})[nums[j]] || "未登记") !== "未登记") done++;
+    }
+  }
+  setStatus("已登记 " + done + " / " + (roster.length * nums.length));
+}
+
+function scheduleSave(stu) {
+  clearTimeout(timers[stu]);
+  timers[stu] = setTimeout(function () { flushOne(stu); }, 500);
+  setStatus("正在保存…");
+}
+
+function flushOne(stu) {
+  return API.save(cur.id, cur.class, stu, answers[stu] || {}).then(function () {
+    delete timers[stu];
+    var left = 0;
+    for (var k in timers) left++;
+    if (!left) setStatus("已保存 " + new Date().toTimeString().slice(0, 5), "ok");
+  }).catch(function (e) { setStatus(e.message, "err"); });
+}
+
+function saveAll() { for (var i = 0; i < roster.length; i++) flushOne(roster[i]); }
+
+function loadCurrent() {
+  var id = $("assignment").value, i;
+  if (!id) { $("gridWrap").classList.add("hidden"); return; }
+  for (i = 0; i < all.length; i++) if (String(all[i].id) === id) cur = all[i];
+  roster = cur.students || [];
+  if (!roster.length) {
+    setStatus("这份作业没带学生名单：本地推送时会把名单一起传上去", "err");
+    $("gridWrap").classList.add("hidden");
+    return;
+  }
+  setStatus("载入中…");
+  API.listSubmissions(cur.id).then(function (subs) {
+    answers = {};
+    for (var k = 0; k < subs.length; k++) answers[subs[k].student] = subs[k].statuses || {};
+    renderGrid();
+    setStatus("载入完成 " + new Date().toTimeString().slice(0, 5), "ok");
+  }).catch(function (e) { setStatus(e.message, "err"); });
+}
+
+$("grid").addEventListener("click", function (ev) {
+  var d = ev.target.closest ? ev.target.closest(".cell") : null;
+  if (!d) return;
+  var stu = d.dataset.stu, q = d.dataset.q;
+  var prev = (answers[stu] && answers[stu][q]) || "未登记";
+  var next = STATUSES[(STATUSES.indexOf(prev) + 1) % STATUSES.length];
+  answers[stu] = answers[stu] || {};
+  answers[stu][q] = next;
+  d.className = "cell " + cellClass(next);
+  d.textContent = MARK[next] || "";
+  updateSummary();
+  scheduleSave(stu);
+});
+
+$("cls").onchange = fillAssignments;
+$("assignment").onchange = loadCurrent;
+$("reload").onclick = loadCurrent;
+
+$("go").onclick = function () {
+  if ($("pass").value !== ACCESS_CODE) { $("gateMsg").textContent = "口令不对"; return; }
+  sessionStorage.setItem("hw_ok", "1");
+  enter();
+};
+if (sessionStorage.getItem("hw_ok") === "1") enter();
+
+function enter() {
+  $("gate").classList.add("hidden");
+  $("main").classList.remove("hidden");
+  boot();
+}
+
+function boot() {
+  if (MOCK) $("mockBar").classList.remove("hidden");
+  setStatus("读取作业清单…");
+  API.listAssignments().then(function (rows) {
+    all = rows;
+    if (!all.length) { setStatus("还没有作业：先在本地跑 hw_sync push", "err"); return; }
+    renderSelectors();
+  }).catch(function (e) { setStatus(e.message, "err"); });
+}
+
+window.addEventListener("beforeunload", function () {
+  var left = 0;
+  for (var k in timers) left++;
+  if (left) saveAll();
+});
+</script>
+</body>
+</html>
