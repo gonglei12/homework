@@ -37,10 +37,17 @@
   thead .name { z-index:4; background:#f6f8fa; }
   tbody tr:nth-child(even) .name { background:#fbfcfd; }
   tbody tr:nth-child(even) td { background:#fbfcfd; }
-  .cell { width:44px; height:40px; cursor:pointer; user-select:none; font-size:14px;
-          display:flex; align-items:center; justify-content:center; border-left:1px solid #f0f3f6; }
-  .cell.st-done { background:#dafbe1; color:var(--ok); font-weight:600; }
-  .cell.st-fix  { background:#fff8c5; color:var(--warn); font-weight:600; }
+  /* **小圆角矩形，里面写题号**（和本地界面一致，用户明确要求不要打勾/改） */
+  .cell { width:40px; height:34px; margin:3px 2px; cursor:pointer; user-select:none;
+          font-size:13px; border-radius:7px; border:1px solid #d8dee4;
+          display:flex; align-items:center; justify-content:center; }
+  /* **和本地界面一致**：绿=完成、蓝=已改错、红=未登记 */
+  .cell.st-done { background:#dafbe1; border-color:#8fd19e; color:#1a7f37; font-weight:600; }
+  .cell.st-fix  { background:#ddf4ff; border-color:#9ecbff; color:#0969da; font-weight:600; }
+  .cell.st-none { background:#ffebe9; border-color:#ffb3ad; color:#cf222e; }
+  .no { width:34px; text-align:center; color:var(--mut); font-size:12px; }
+  thead .no { background:#f6f8fa; }
+  .badge { display:block; font-size:10px; color:#0969da; font-weight:600; line-height:1.1; }
   .cell:active { background:var(--hl); }
   .legend { display:flex; gap:14px; font-size:12px; color:var(--mut); margin-top:8px; flex-wrap:wrap; }
   .dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px;
@@ -96,7 +103,7 @@
         <span><span class="dot c"></span>未登记</span>
         <span><span class="dot a"></span>完成</span>
         <span><span class="dot b"></span>已改错</span>
-        <span>点格子切换 · <b>点姓名整行设完成</b> · 点题号整列设完成</span>
+        <span>点格子循环切换 · <b>点姓名 = 整行「完成 ↔ 未登记」</b></span>
       </div>
     </div>
 
@@ -191,7 +198,7 @@ function setStatus(t, kind) {
   s.textContent = t;
   s.className = "status " + (kind || "");
 }
-function cellClass(v) { return v === "完成" ? "st-done" : v === "已改错" ? "st-fix" : ""; }
+function cellClass(v) { return v === "完成" ? "st-done" : v === "已改错" ? "st-fix" : "st-none"; }
 
 function renderSelectors() {
   var clsSel = $("cls"), classes = [], i;
@@ -222,23 +229,36 @@ function renderGrid() {
   var nums = cur.numbers || [], t = $("grid"), i, j;
   t.innerHTML = "";
 
+  // 每题"已改错"人数（对应本地界面列头上的「改错N」）
+  var fixCount = {};
+  for (i = 0; i < roster.length; i++) {
+    for (j = 0; j < nums.length; j++) {
+      if (((answers[roster[i]] || {})[nums[j]] || "") === "已改错") {
+        fixCount[nums[j]] = (fixCount[nums[j]] || 0) + 1;
+      }
+    }
+  }
+
   var thead = document.createElement("thead");
   var htr = document.createElement("tr");
+  var thNo = document.createElement("th");
+  thNo.className = "no"; thNo.textContent = "学号";
+  htr.append(thNo);
   var thName = document.createElement("th");
-  thName.className = "name"; thName.textContent = "姓名";
+  thName.className = "name"; thName.textContent = "姓名（点 = 一键完成）";
   htr.append(thName);
   for (i = 0; i < nums.length; i++) {
     (function (n) {
       var th = document.createElement("th");
-      th.className = "qh"; th.textContent = n;
-      th.title = "点一下：把第 " + n + " 题（所有人）设为完成";
-      th.onclick = function () {
-        for (var s = 0; s < roster.length; s++) {
-          answers[roster[s]] = answers[roster[s]] || {};
-          answers[roster[s]][n] = "完成";
-        }
-        renderBody(); saveAll();
-      };
+      th.className = "qh";
+      th.textContent = n;
+      if (fixCount[n]) {
+        var b = document.createElement("span");
+        b.className = "badge";
+        b.textContent = "改错" + fixCount[n];
+        th.append(b);
+      }
+      // **取消"点题号整列"**（用户 2026-10-22 要求：容易误操作）
       htr.append(th);
     })(nums[i]);
   }
@@ -247,28 +267,39 @@ function renderGrid() {
   var tb = document.createElement("tbody");
   for (i = 0; i < roster.length; i++) {
     var stu = roster[i], tr = document.createElement("tr");
+    var tdn = document.createElement("td");
+    tdn.className = "no";
+    tdn.textContent = ("0" + (i + 1)).slice(-2);
+    tr.append(tdn);
+
     var td0 = document.createElement("td");
     td0.className = "name";
     td0.textContent = stu;
-    td0.title = stu + "（点一下：把这个人所有题设为完成）";
-    // **点姓名 = 整行设为完成**（用户要"一键填整行"，原来只有整列，方向反了）
+    td0.title = stu + "（点一下：这个人所有题设为完成）";
     td0.onclick = (function (who) {
       return function () {
-        for (var k = 0; k < nums.length; k++) {
-          answers[who] = answers[who] || {};
-          answers[who][nums[k]] = "完成";
+        // **切换**：整行都完成了 → 清空为未登记；否则 → 全部完成
+        var allDone = true, k;
+        for (k = 0; k < nums.length; k++) {
+          if (((answers[who] || {})[nums[k]] || "未登记") !== "完成") { allDone = false; break; }
         }
-        renderBody(); flushOne(who);
+        answers[who] = answers[who] || {};
+        for (k = 0; k < nums.length; k++) {
+          if (allDone) delete answers[who][nums[k]];
+          else answers[who][nums[k]] = "完成";
+        }
+        renderGrid(); flushOne(who);
       };
     })(stu);
     tr.append(td0);
+
     for (j = 0; j < nums.length; j++) {
-      var n = nums[j], td = document.createElement("td");
-      var v = (answers[stu] && answers[stu][n]) || "未登记";
+      var n2 = nums[j], td = document.createElement("td");
+      var v = (answers[stu] && answers[stu][n2]) || "未登记";
       var d = document.createElement("div");
       d.className = "cell " + cellClass(v);
-      d.textContent = MARK[v] || "";
-      d.dataset.stu = stu; d.dataset.q = n;
+      d.textContent = n2;
+      d.dataset.stu = stu; d.dataset.q = n2;
       td.append(d); tr.append(td);
     }
     tb.append(tr);
