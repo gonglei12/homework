@@ -113,7 +113,10 @@
 
     <div class="bar">
       <span id="status" class="status">未开始</span>
-      <button class="btn sm ghost" id="reload">重新载入</button>
+      <span style="display:flex;gap:8px">
+        <button class="btn sm ghost" id="reload">重新载入</button>
+        <button class="btn sm ghost" id="logout" title="清掉记住的口令">退出</button>
+      </span>
     </div>
   </div>
 </div>
@@ -124,7 +127,7 @@
 // ===========================================================================
 var SUPABASE_URL = "https://hibdtvpmzqkkapmbdyoo.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_OWq4zy0waIK1riL0j525Tw_F6n6Al4V";
-var ACCESS_CODE = "gls2026";
+var ACCESS_CODE = "gls";
 
 var MOCK = !SUPABASE_URL || !SUPABASE_ANON_KEY;
 var STATUSES = ["未登记", "完成", "已改错"];
@@ -403,13 +406,18 @@ $("grid").addEventListener("click", function (ev) {
 $("cls").onchange = fillAssignments;
 $("assignment").onchange = loadCurrent;
 $("reload").onclick = loadCurrent;
+// 「退出」：清掉本地记住的口令，下次要重新输
+$("logout").onclick = function () {
+  localStorage.removeItem("hw_ok");
+  location.reload();
+};
 
 $("go").onclick = function () {
   if ($("pass").value !== ACCESS_CODE) { $("gateMsg").textContent = "口令不对"; return; }
-  sessionStorage.setItem("hw_ok", "1");
+  localStorage.setItem("hw_ok", "1");
   enter();
 };
-if (sessionStorage.getItem("hw_ok") === "1") enter();
+if (localStorage.getItem("hw_ok") === "1") enter();
 
 function enter() {
   $("gate").classList.add("hidden");
