@@ -96,7 +96,7 @@
         <span><span class="dot c"></span>未登记</span>
         <span><span class="dot a"></span>完成</span>
         <span><span class="dot b"></span>已改错</span>
-        <span>点格子切换状态 · 点列头整列设完成</span>
+        <span>点格子切换 · <b>点姓名整行设完成</b> · 点题号整列设完成</span>
       </div>
     </div>
 
@@ -231,7 +231,7 @@ function renderGrid() {
     (function (n) {
       var th = document.createElement("th");
       th.className = "qh"; th.textContent = n;
-      th.title = "点一下把第 " + n + " 题全部设为完成";
+      th.title = "点一下：把第 " + n + " 题（所有人）设为完成";
       th.onclick = function () {
         for (var s = 0; s < roster.length; s++) {
           answers[roster[s]] = answers[roster[s]] || {};
@@ -248,7 +248,19 @@ function renderGrid() {
   for (i = 0; i < roster.length; i++) {
     var stu = roster[i], tr = document.createElement("tr");
     var td0 = document.createElement("td");
-    td0.className = "name"; td0.textContent = stu; td0.title = stu;
+    td0.className = "name";
+    td0.textContent = stu;
+    td0.title = stu + "（点一下：把这个人所有题设为完成）";
+    // **点姓名 = 整行设为完成**（用户要"一键填整行"，原来只有整列，方向反了）
+    td0.onclick = (function (who) {
+      return function () {
+        for (var k = 0; k < nums.length; k++) {
+          answers[who] = answers[who] || {};
+          answers[who][nums[k]] = "完成";
+        }
+        renderBody(); flushOne(who);
+      };
+    })(stu);
     tr.append(td0);
     for (j = 0; j < nums.length; j++) {
       var n = nums[j], td = document.createElement("td");
